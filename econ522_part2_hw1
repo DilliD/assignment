@@ -1,0 +1,114 @@
+clear; clc; close all;
+
+load econ522_hw_data.mat;
+data = table2array(data);
+
+t = data(:,1); % Year: Observation period = January 1st
+L = data(:,2); % Annual Employment
+wL = data(:,3); % Annual Gross Domestic Income, Billions of $
+Y = data(:,4); % GDP, Billions of $
+K = data(:,5)./1000; % Current-Cost Net Stock of Fixed Assets, Billions of Dollars
+R = data(:,6); % One-year Real Interest Rate
+
+%%
+% Income per Worker growth at a constant rate
+y1 = Y./L;
+tosave = isnan(y1)==0;
+t1 = t(tosave==1,:);
+y1 = y1(tosave==1,:);
+y1 = 100*(log(y1(2:end,:)) - log(y1(1:end-1,:)));
+t1 = t1(2:end,:);
+
+result = get_ols(y1, get_poly(t1,1));
+disp("")
+disp("------------------------")
+disp(" y = yearly growth rate of income per worker")
+disp("H0 : b1 = 0")
+disp(num2str([result.ols(2,1), result.tv(2,1)]));
+disp("T = "+num2str(size(y1,1)))
+disp("------------------------")
+disp(" ");
+
+%%
+% Capital-Output ratio is roughly constant
+y2 = K./Y;
+tosave = isnan(y2)==0;
+t2 = t(tosave==1,:);
+y2 = y2(tosave==1,:);
+
+result = get_ols(y2, get_poly(t2,1));
+disp(" y = capital-output ratio")
+disp("H0 : b1 = 0")
+disp(num2str([result.ols(2,1), result.tv(2,1)]));
+disp("T = "+num2str(size(y2,1)))
+disp("------------------------")
+disp(" ");
+
+%%
+% Return for capital has no trend
+y3 = R;
+tosave = isnan(y3)==0;
+t3 = t(tosave==1,:);
+y3 = y3(tosave==1,:);
+
+result = get_ols(y3, get_poly(t3,2));
+disp(" y = capital-output ratio")
+disp("H0 : b1 = 0 and b2 = 0")
+R = [zeros(2,1), eye(2)];
+wald = (R*result.ols)'*inv(R*result.vcov*R')*(R*result.ols);
+pv = 1-chi2cdf(wald, 2);
+disp(num2str([result.ols(2:end,1), result.tv(2:end,1)]));
+disp(num2str([wald, pv]));
+disp("T = "+num2str(size(y3,1)))
+disp("------------------------")
+disp(" ");
+
+%%
+% Labor income share is roughly constant
+y4 = 100*wL./Y;
+tosave = isnan(y4)==0;
+t4 = t(tosave==1,:);
+y4 = y4(tosave==1,:);
+
+result = get_ols(y4, get_poly(t4,1));
+disp(" y = Labor Income Share")
+disp("H0 : b1 = 0")
+disp(num2str([result.ols(2,1), result.tv(2,1)]));
+disp("T = "+num2str(size(y4,1)))
+disp("------------------------")
+disp(" ");
+
+%%
+
+tmin = min([t1;t2;t3;t4]);
+tmax = max([t1;t2;t3;t4]);
+t_axis = (tmin:1:tmax)';
+figure(1);
+plot(t1, y1, 'linewidth', 3); hold on
+plot(t2, y2, 'linewidth', 3);
+plot(t3, y3, '-k', 'linewidth', 3);
+plot(t4, y4, 'linewidth', 3); hold off
+xlabel("Year", 'fontsize', 20)
+axis([tmin tmax -10 60]);
+xticks(t_axis)
+xticklabels(num2str(t_axis));
+legend("Growth Rate of Income Per Worker(%)", "Capital-Output Ratio", "Return for Capital(%)", "Labor Income Share(%)", 'fontsize', 20);
+grid on; box on;
+result = get_ols(y1, get_poly(t1,1));
+%%
+function result = get_poly(t, p)
+result = t.^(0:1:p);
+end
+
+function result = get_ols(y,x)
+invxx = inv(x'*x);
+b = invxx*x'*y;
+rsd2 = (y - x*b).^2;
+vcov = invxx*(x'*(rsd2.*x))*invxx;
+se = sqrt(diag(vcov));
+tv = b./se;
+result.ols = b;
+result.vcov = vcov;
+result.se = se;
+result.tv = tv;
+end
