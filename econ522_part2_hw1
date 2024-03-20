@@ -3,6 +3,9 @@ clear; clc; close all;
 load econ522_hw_data.mat;
 data = table2array(data);
 
+% where = find(data(:,1) == 1982); data = data(where:end,:);
+% where = find(data(:,1) == 1970); data = data(1:where,:);
+
 t = data(:,1); % Year: Observation period = January 1st
 L = data(:,2); % Annual Employment
 wL = data(:,3); % Annual Gross Domestic Income, Billions of $
