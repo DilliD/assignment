@@ -33,7 +33,7 @@ ugrid = u(cgrid);
 v0 = 1*ugrid(:,1);
 while iter < iterlim
     [v1,idx] = max( ugrid + b0*repmat(v0, [1, numk]), [], 1 ); v1=v1';
-    disp( num2str([iter, max(abs(v0 - v1))]) )
+    disp( num2str([iter, norm(v0 - v1,2)]) )
     if norm((v1 - v0),2) < thr
         disp("Algorithm is completed"); break; 
     else
@@ -121,3 +121,4 @@ figure;
     ylabel("saving rate : s_{t} \in(0,1)",'fontsize', 20)
     box on; grid on;
 end
+
