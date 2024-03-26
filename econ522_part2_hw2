@@ -1,0 +1,123 @@
+clear; clc; close all;
+
+% Parameters
+% Model Parameters
+A0=1; a0 = 0.33; delta = 0.05; b0 = 0.98; g0 = 2; k0 = 5; % Initial capital
+para.A = A0;
+para.alpha = a0;
+para.delta = delta;
+para.beta = b0;
+para.gamma = g0;
+
+f = @(k)( A0*(k.^a0) + (1-delta)*k ); % prooduction function
+u = @(c)( (c.^(1-g0))./(1-g0) ); % CRRA utility
+% u = @(c)( log(c) );
+% Bellman Equation
+% V(k) = max_{c, ks} { u(c) + b0*V( ks ) }
+% s.t. c = f(k) - ks + (1-delta)*k
+
+kss = ((a0*b0*A0)/(1 - b0*(1-delta)))^(1/(1-a0));
+yss = A0*kss^a0;
+
+% Tuning Parameters
+thr = 10^(-7); iterlim = 1000; iter = 1;
+mink = 0.1; maxk= 15; numk = 1000;
+T=81; % Time Length
+
+kgrid = linspace(mink, maxk, numk)';
+cgrid = f(kgrid') - kgrid;
+cgrid = cgrid.*(cgrid>0) + eps*(cgrid<=0);
+ugrid = u(cgrid);
+
+% Value Function Iteration
+v0 = 1*ugrid(:,1);
+while iter < iterlim
+    [v1,idx] = max( ugrid + b0*repmat(v0, [1, numk]), [], 1 ); v1=v1';
+    disp( num2str([iter, max(abs(v0 - v1))]) )
+    if norm((v1 - v0),2) < thr
+        disp("Algorithm is completed"); break; 
+    else
+        v0 = v1;
+        iter = iter + 1;
+    end
+    if iter==iterlim; disp("Algorithm is terminated. Increase limitation of iteration"); end
+end
+
+vf = v1;
+c = @(k)( f(k') - kgrid );
+obj = @(k)(  u(  c(k).*(c(k)>0) + eps*(c(k)<=0)  )  + b0*repmat(vf,[1, max(size(k))]) );
+
+policy_func = get_policy(obj, kgrid, kgrid);
+kt = get_optimal_path( obj, k0, kgrid, T );
+
+drawing_result( obj, vf, k0, kgrid, T, para)
+
+%%
+function result = get_policy(obj, k, kgrid)
+numk = max(size(k));
+[~,idx] = max( obj(k), [], 1);
+result = kgrid(idx,:);
+end
+
+function result = get_optimal_path( obj, k, kgrid, T)
+result = [k; zeros(T-1,1)];
+k0 = k;
+for t=2:T
+    [~,idx] = max( obj(k0), [], 1);
+    k0 = kgrid(idx,:);
+    result(t,1) = k0;
+end
+end
+
+function result = drawing_result( obj, v, k0, kgrid, T, para)
+kt = get_optimal_path( obj, k0, kgrid, T );
+yt = (para.A)*kt.^(para.alpha);
+st = (kt(2:end,:) - (1-para.delta)*kt(1:end-1,:))./yt(1:end-1);
+kss = ((para.alpha*para.beta*para.A)/(1 - para.beta*(1-para.delta)))^(1/(1-para.alpha));
+yss = para.A * (kss).^(para.alpha);
+%  c = y - ks + (1-delta)*k
+%  ks - (1-delta)*k = y - c
+
+figure;
+    subplot(2,1,1)
+        plot( kgrid, v , 'linewidth', 2);
+        xlabel("Capital per person(k)",'fontsize', 20);
+        ylabel("Value Function : V(k)",'fontsize', 20)
+        box on; grid on;
+        subplot(2,1,2)
+        plot( kgrid, get_policy(obj, kgrid, kgrid) , 'linewidth', 2);
+        xlabel("Capital per person(k)",'fontsize', 20);
+        ylabel("policy function : g(k)",'fontsize', 20)
+        box on; grid on;
+   
+figure;
+    plot( (1:1:T)', kt, '-o',  'linewidth', 2); hold on
+    plot( (1:1:T)', kss*ones(T,1), '-', 'linewidth', 2 ); hold off
+    axis([0 T+1 min(kt)-0.5*std(kt), max(kt)+0.5*std(kt)])
+    xticks((0:1:T+1)');
+    xticklabels(num2str((0:1:T+1)'))
+    xlabel("period : t",'fontsize', 20);
+    ylabel("capital per person : k_{t}",'fontsize', 20)
+    legend("k_{t} Path", "Steady State k*", 'fontsize', 15);
+    box on; grid on;
+
+figure;
+    plot( (1:1:T)', yt, '-o',  'linewidth', 2); hold on
+    plot( (1:1:T)', yss*ones(T,1), '-', 'linewidth', 2 ); hold off
+    axis([0 T+1 min(yt)-0.5*std(yt), max(yt)+0.5*std(yt)])
+    xticks((0:1:T+1)');
+    xticklabels(num2str((0:1:T+1)'))
+    xlabel("period : t",'fontsize', 20);
+    ylabel("income per person : y_{t}",'fontsize', 20)
+    legend("y_{t} Path", "Steady State y*", 'fontsize', 15);
+    box on; grid on;
+
+figure;
+    plot( (1:1:T-1)', st, '-',  'linewidth', 2);
+    axis([0 T min(st)-0.5*std(st), max(st)+0.5*std(st)])
+    xticks((0:1:T)');
+    xticklabels(num2str((0:1:T)'))
+    xlabel("period : t",'fontsize', 20);
+    ylabel("saving rate : s_{t} \in(0,1)",'fontsize', 20)
+    box on; grid on;
+end
