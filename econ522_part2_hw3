@@ -1,0 +1,135 @@
+clear; clc; close all;
+
+% Parameters
+% Model Parameters
+alpha0 = 0.33; delta = 0.05; b0 = 0.98; g0 = 2; k0 = 10; % Initial capital
+zL = -0.3; zH = 0.3; z=[zH;zL];
+Pi = [0.7, 0.3; 0.4, 0.6];
+prob_given_H = Pi(1,:)';
+prob_given_L = Pi(2,:)';
+
+prob = @(z)( prob_given_H.*(z == zH) + prob_given_L.*(z == zL) );
+para.alpha = alpha0;
+para.delta = delta;
+para.beta = b0;
+para.gamma = g0;
+
+f = @(k,z)( exp(z).*(k.^alpha0) + (1-delta)*k ); % prooduction function
+u = @(c)( (c.^(1-g0))./(1-g0) ); % CRRA utility
+
+% u = @(c)( log(c) );
+% Bellman Equation
+% V(k,z) = max_{c, ks} { u(c) + b0*V(ks,zH ) V(ks,zL)]*pi(zH, zL|z) }
+% s.t. c = f(k, z) - ks + (1-delta)*k
+
+% Tuning Parameters
+thr = 10^(-7); iterlim = 2000; iter = 1;
+mink = 1; maxk= 20; numk = 1000;
+T=101; % Time Length
+S = 50; % # of Simulation Experiment 
+
+kgrid = linspace(mink, maxk, numk)';
+cgrid_H = f(kgrid',zH) - kgrid;
+cgrid_H = cgrid_H.*(cgrid_H>0) + eps*(cgrid_H<=0);
+ugrid_H = u(cgrid_H);
+
+cgrid_L=  f(kgrid',zL) - kgrid;
+cgrid_L = cgrid_L.*(cgrid_L>0) + eps*(cgrid_L<=0);
+ugrid_L = u(cgrid_L);
+
+% Value Function Iteration
+v0 = [ugrid_H(:,1), ugrid_L(:,1)];
+while iter < iterlim
+    [v1_H,~] = max( ugrid_H + b0*repmat(v0*prob_given_H, [1, numk]), [], 1 ); v1(:,1)=v1_H';
+    [v1_L,~] = max( ugrid_L + b0*repmat(v0*prob_given_L, [1, numk]), [], 1 ); v1(:,2)=v1_L';
+    
+    disp( num2str([iter, norm(v0(:,1) - v1(:,1),2), norm(v0(:,2) - v1(:,2),2)]) )
+    if norm((v1(:,1) - v0(:,1)),2) < thr; vf(:,1) = v1(:,1); end
+    if norm((v1(:,2) - v0(:,2)),2) < thr; vf(:,2) = v1(:,2); end
+    if (norm((v1(:,1) - v0(:,1)),2) < thr)*(norm((v1(:,2) - v0(:,2)),2) < thr)==1
+        disp("Algorithm is completed.")
+        break;
+    else
+        v0 = v1; iter = iter + 1;
+    end
+    if iter==iterlim; disp("Algorithm is terminated. Increase limitation of iteration"); end
+end
+
+c = @(k,z)( f(k',z) - kgrid );
+obj = @(k,z)(  u(  c(k,z).*(c(k,z)>0) + eps*(c(k,z)<=0)  )  + b0*repmat(vf*prob(z),[1, max(size(k))]) );
+
+policy_func(:,1) = get_policy(obj, kgrid, zH, kgrid);
+policy_func(:,2) = get_policy(obj, kgrid, zL, kgrid);
+
+figure;
+subplot(2,1,1)
+plot(kgrid, vf(:,1),'-b', 'linewidth',2); hold on
+plot(kgrid, vf(:,2), '-r', 'linewidth',2); hold off
+ylabel("Value Function : V(k,z)", 'fontsize', 15)
+xlabel("capital per person : k",'fontsize',15)
+legend("V(k, z_{H})", "V(k, z_{L})", 'fontsize', 20);
+grid on; box on;
+
+subplot(2,1,2)
+plot(kgrid, policy_func(:,1),'-b', 'linewidth',2); hold on
+plot(kgrid, policy_func(:,2), '-r', 'linewidth',2);
+plot(kgrid, kgrid, ':k', 'linewidth', 2); hold off
+ylabel("Policy Function : g(k,z)", 'fontsize', 15)
+xlabel("capital per person : k",'fontsize',15)
+legend("g(k, z_{H})", "g(k, z_{L})","45 degree line", 'fontsize', 20);
+grid on; box on;
+
+%%
+kt = zeros(T, S);
+for simiter = 1:S
+    result = get_optimal_path( obj, k0, zL, kgrid, z, Pi, T);
+    kt(:,simiter) = result(:,1);
+    zt(:,simiter) = result(:,2);
+    ct(:,simiter) = diag(f(kt(1:end-1,simiter), zt(1:end-1,simiter)')) - kt(2:end,simiter);
+    yt(:,simiter) = diag(f(kt(1:end-1,simiter), zt(1:end-1,simiter)')) - (1-delta)*kt(1:end-1,simiter);
+    it(:,simiter) = kt(2:end,simiter) - (1-delta)*kt(1:end-1,simiter);
+end
+
+draw_result(kt, "k_{t}");
+draw_result(ct, "c_{t}");
+draw_result(yt, "y_{t}");
+draw_result(it, "i_{t}");
+
+
+%%
+function result = get_policy(obj, k, z, kgrid)
+numk = max(size(k));
+[~,idx] = max( obj(k, z), [], 1);
+result = kgrid(idx,:);
+end
+
+function result = get_optimal_path( obj, k, z0, kgrid, z, prob, T)
+result = [[k,z0]; zeros(T-1,2)];
+k0 = k;
+for t=2:T
+    [~,idx] = max( obj(k0,z0), [], 1);
+    k0 = kgrid(idx,:);
+    where0 = find(z == z0);
+    prob0 = prob(where0, :)';
+    p = rand(1);
+    z0 = z(1,1).*(p<=prob0(1,1)) + z(2,1).*(p>prob0(1,1));
+    result(t,1) = k0;
+    result(t,2) = z0;
+end
+end
+
+function result = draw_result(yt, depname)
+[T,S] = size(yt); Eyt = mean(yt, 2); 
+figure;
+plot((1:1:T)', Eyt, '-', 'color', [0 0 0], 'linewidth', 2); hold on
+for simiter=1:S
+plot((1:1:T)', yt(:,simiter), '-', 'color', [0.8 0.8 0.8], 'linewidth', 1);
+end
+plot((1:1:T)', Eyt, '-', 'color', [0 0 0], 'linewidth', 2); hold off
+axis([0,T+1,min(yt(:)) - 0.5*std(yt(:)),max(yt(:))+ 0.5*std(yt(:))])
+xticks((1:10:T)');
+xlabel("period t", 'fontsize', 20);
+ylabel("Realized Path for " +depname, 'fontsize', 20);
+legend("Average of all Realized Path", "Realized Path", 'fontsize', 15);
+box on; grid on;
+end
