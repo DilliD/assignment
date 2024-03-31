@@ -90,17 +90,15 @@ draw_result(ct, "c_{t}");
 draw_result(yt, "y_{t}");
 draw_result(it, "i_{t}");
 %%
+lnct = log(ct + eps);
+lnyt = log(yt + eps);
+lnit = log(abs(it)+eps);
 
-var_lnct = var(log(ct + eps),1)';
-var_lnyt = var(log(yt + eps),1)';
-var_lnit = var(log(abs(it)+eps),1)';
 
-var_ct = var(ct,1)';
-var_yt = var(yt,1)';
-var_it = var(it,1)';
+get_unc_var = @(x)( var(mean(x,1)',1) + mean(var(x,1)',1) );
 
-mean([var_lnit, var_lnyt, var_lnct], 1)
-mean([var_it, var_yt, var_ct], 1)
+[get_unc_var(lnit), get_unc_var(lnyt) get_unc_var(lnct)]
+[get_unc_var(it), get_unc_var(yt) get_unc_var(ct)]
 
 %%
 function result = get_policy(obj, k, z, kgrid)
