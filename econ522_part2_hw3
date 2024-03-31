@@ -9,10 +9,6 @@ prob_given_H = Pi(1,:)';
 prob_given_L = Pi(2,:)';
 
 prob = @(z)( prob_given_H.*(z == zH) + prob_given_L.*(z == zL) );
-para.alpha = alpha0;
-para.delta = delta;
-para.beta = b0;
-para.gamma = g0;
 
 f = @(k,z)( exp(z).*(k.^alpha0) + (1-delta)*k ); % prooduction function
 u = @(c)( (c.^(1-g0))./(1-g0) ); % CRRA utility
@@ -26,7 +22,7 @@ u = @(c)( (c.^(1-g0))./(1-g0) ); % CRRA utility
 thr = 10^(-7); iterlim = 2000; iter = 1;
 mink = 1; maxk= 20; numk = 1000;
 T=101; % Time Length
-S = 50; % # of Simulation Experiment 
+S = 100; % # of Simulation Experiment 
 
 kgrid = linspace(mink, maxk, numk)';
 cgrid_H = f(kgrid',zH) - kgrid;
@@ -62,21 +58,20 @@ policy_func(:,1) = get_policy(obj, kgrid, zH, kgrid);
 policy_func(:,2) = get_policy(obj, kgrid, zL, kgrid);
 
 figure;
-subplot(2,1,1)
 plot(kgrid, vf(:,1),'-b', 'linewidth',2); hold on
 plot(kgrid, vf(:,2), '-r', 'linewidth',2); hold off
-ylabel("Value Function : V(k,z)", 'fontsize', 15)
+ylabel("Value Function : V(k,a)", 'fontsize', 15)
 xlabel("capital per person : k",'fontsize',15)
-legend("V(k, z_{H})", "V(k, z_{L})", 'fontsize', 20);
+legend("V(k, a_{H})", "V(k, a_{L})", 'fontsize', 20);
 grid on; box on;
 
-subplot(2,1,2)
+figure
 plot(kgrid, policy_func(:,1),'-b', 'linewidth',2); hold on
 plot(kgrid, policy_func(:,2), '-r', 'linewidth',2);
 plot(kgrid, kgrid, ':k', 'linewidth', 2); hold off
-ylabel("Policy Function : g(k,z)", 'fontsize', 15)
+ylabel("Policy Function : g(k,a)", 'fontsize', 15)
 xlabel("capital per person : k",'fontsize',15)
-legend("g(k, z_{H})", "g(k, z_{L})","45 degree line", 'fontsize', 20);
+legend("g(k, a_{H})", "g(k, a_{L})","45 degree line", 'fontsize', 20);
 grid on; box on;
 
 %%
@@ -94,7 +89,18 @@ draw_result(kt, "k_{t}");
 draw_result(ct, "c_{t}");
 draw_result(yt, "y_{t}");
 draw_result(it, "i_{t}");
+%%
 
+var_lnct = var(log(ct + eps),1)';
+var_lnyt = var(log(yt + eps),1)';
+var_lnit = var(log(abs(it)+eps),1)';
+
+var_ct = var(ct,1)';
+var_yt = var(yt,1)';
+var_it = var(it,1)';
+
+mean([var_lnit, var_lnyt, var_lnct], 1)
+mean([var_it, var_yt, var_ct], 1)
 
 %%
 function result = get_policy(obj, k, z, kgrid)
@@ -123,7 +129,11 @@ function result = draw_result(yt, depname)
 figure;
 plot((1:1:T)', Eyt, '-', 'color', [0 0 0], 'linewidth', 2); hold on
 for simiter=1:S
-plot((1:1:T)', yt(:,simiter), '-', 'color', [0.8 0.8 0.8], 'linewidth', 1);
+    plot((1:1:T)', yt(:,simiter), '-', 'color', [0.9 0.9 0.9], 'linewidth', 1);
+end
+idx = (1:floor(S/3):S)';
+for simiter=1:max(size(idx))
+    plot((1:1:T)', yt(:,simiter), '-', 'linewidth', 1);
 end
 plot((1:1:T)', Eyt, '-', 'color', [0 0 0], 'linewidth', 2); hold off
 axis([0,T+1,min(yt(:)) - 0.5*std(yt(:)),max(yt(:))+ 0.5*std(yt(:))])
