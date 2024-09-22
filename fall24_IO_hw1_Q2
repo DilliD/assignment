@@ -58,7 +58,9 @@ tex2_ab_overid = num2str( round(Jn,3)) + "&" + num2str( round(pv,3))+"\\";
 % ds_j / dp_1 = - exp(d_j) * S^{-2}*a*exp(d_1)
 %             = -a*s_j*s_1
 
-get_pe_jj_nest = @(para)(  sum( para(1,1)*p.*(1-y).*wj ,1)'./sum( wj, 1)' ); 
+prod = prod_id == (1:1:10);
+get_pe_jj_nest = @(para)(  sum( para(1,1)*p.*(1-y).*prod ,1)'./sum( prod, 1)' ); 
+% get_pe_jj_nest = @(para)(  sum( para(1,1)*p.*(1-y).*wj ,1)'./sum( wj, 1)' ); 
 pe_jj_nest = get_pe_jj_nest(result_gmm.b);
 gr = gradp(result_gmm.b, get_pe_jj_nest);
 var_pe_jj_nest = gr*result_gmm.vcov*gr';
@@ -66,12 +68,12 @@ se_pe_jj_nest = sqrt(diag(var_pe_jj_nest));
 
 y1 = y(prod_id==1,:); y1 = kron( y1, ones(10,1));
 p1 = p(prod_id==1,:); p1 = kron( p1, ones(10,1));
-get_pe_j1_nest = @(para)(  sum( -para(1,1)*y1.*p1.*wj.*(prod_id>1) ,1)'./sum( wj.*(prod_id>1), 1)' ); 
+get_pe_j1_nest = @(para)(  sum( -para(1,1)*y1.*p1.*prod.*(prod_id>1) ,1)'./sum( prod.*(prod_id>1), 1)' ); 
 pe_j1_nest = get_pe_j1_nest(result_gmm.b);
 gr = gradp(result_gmm.b, get_pe_j1_nest);
 var_pe_j1_nest = gr*result_gmm.vcov*gr';
 se_pe_j1_nest = sqrt(diag(var_pe_j1_nest));
-tex2_cd = ["Diet"; "Regular"] + "&" + num2str( round(pe_jj_nest,3) ) + "&" + num2str( round(se_pe_jj_nest,3) ) + "\\";
+tex2_cd = ["Diet : "+num2str((1:1:5)'); "Regular : "+num2str((6:1:10)')] + "&" + num2str( round(pe_jj_nest,3) ) + "&" + num2str( round(se_pe_jj_nest,3) ) + "\\";
 tex2_cd = tex2_cd + num2str( round(pe_j1_nest,3) ) + "&" + num2str( round(se_pe_j1_nest,3) ) + "\\";
 
 y_last = y(period==max(period),:);
