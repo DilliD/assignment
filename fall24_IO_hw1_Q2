@@ -19,7 +19,9 @@ x = [x, log(sjg)];
 mat_sugar = reshape(sugar, [10, 100]);
 mat_caff = reshape(caff, [10,100]);
 for j=1:10
-    idx = (2:1:10)'*(j==1) + (1:1:9)'*(j==10) + [(1:1:j-1)'; (j+1:1:10)']*(j>1).*(j<10);
+    if j <= 5; idx = (1:1:5)'; idx(j,:) = [];
+    elseif j>5; idx = (6:1:10)'; idx(j-5,:) = [];
+    end
     avg_comp_sugar(j,:) = mean(mat_sugar(idx,:),1);
     avg_comp_caff(j,:) = mean(mat_caff(idx,:), 1);
 end
