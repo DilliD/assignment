@@ -52,7 +52,7 @@ tex1_ab_overid = num2str( round(Jn,3)) + "&" + num2str( round(pv,3))+"\\";
 %             = a*s_j - a*s_j^2 = a*s_j*(1-s_j)
 % ds_j / dp_1 = - exp(d_j) * S^{-2}*a*exp(d_1)
 %             = -a*s_j*s_1
-
+y = share;
 prod = prod_id == (1:1:10);
 get_pe_jj_nest = @(para)(  sum( para(1,1)*p.*(1-y).*prod ,1)'./sum( prod, 1)' ); 
 % get_pe_jj_nest = @(para)(  sum( para(1,1)*p.*(1-y).*wj ,1)'./sum( wj, 1)' ); 
@@ -68,11 +68,12 @@ pe_j1_nest = get_pe_j1_nest(result_gmm.b);
 gr = gradp(result_gmm.b, get_pe_j1_nest);
 var_pe_j1_nest = gr*result_gmm.vcov*gr';
 se_pe_j1_nest = sqrt(diag(var_pe_j1_nest));
-tex1_cd = ["Diet : "+num2str((1:1:5)'); "Regular : "+num2str((6:1:10)')] + "&" + num2str( round(pe_jj_nest,3) ) + "&" + num2str( round(se_pe_jj_nest,3) ) + "\\";
+tex1_cd = ["Diet&"+num2str((1:1:5)'); "Regular&"+num2str((6:1:10)')] + "&" + num2str( round(pe_jj_nest,3) ) + "&" + num2str( round(se_pe_jj_nest,3) ) + "\\";
 tex1_cd = tex1_cd + num2str( round(pe_j1_nest,3) ) + "&" + num2str( round(se_pe_j1_nest,3) ) + "\\";
 
 y_last = y(period==max(period),:);
-Jacobi = -result_gmm.b(1,1)*y_last*y_last';
+Jacobi = -(y_last)*y_last';
+Jacobi = result_gmm.b(1,1) * (Jacobi - diag(Jacobi) + diag(y_last.*(1-y_last)));
 tex1_e = [];
 for t=1:10
     tex00 = "";
