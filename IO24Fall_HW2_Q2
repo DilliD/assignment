@@ -40,7 +40,7 @@ tic
 delta_1n = zeros(num_sim,T);
 for iter=1:num_sim
     disp(iter);
-    result = draw_yv(S, seed_num, yit); vy = result.y;
+    result = draw_yv(S, yit, seed_num); vy = result.y;
     data.vyp = []; data.vyp = kron(vy, oneJ').*data.price;
     data.vyph = []; data.vyph = kron(vy, oneJ').*data.ph;
     data.v1x1= []; data.v1x1 = repmat(result.v1, [1,JT]).*(data.x1);
@@ -64,8 +64,8 @@ end
 ans4latex = ans4latex + "\\";
 
 %%
-function result = draw_yv(S, seed, y)
-    rng(seed);
+function result = draw_yv(S, y, seed)
+    % rng(seed);
     idx = datasample( (1:1:size(y,1))', S );
     result.y = y(idx, :);
     result.v1 = randn(S,1);
