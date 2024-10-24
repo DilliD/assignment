@@ -70,6 +70,12 @@ sqrt_invzz = chol(invzz);
 gmm_proj = inv(X0'*Z0*invzz*Z0'*X0)*X0'*Z0*invzz*Z0';
 gmm_rsd_maker = (eye(JT) - X0*gmm_proj);
 
+idx_col = (1:1:J);
+for j=2:J
+    idx_col = [idx_col; [(j : 1 : J), (1:1:j-1)]];
+end
+
+
 %%
 xb0 = (X0*para10)';
 delta00 =  get_delta(data, para20, xb0, "print");
