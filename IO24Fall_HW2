@@ -1,16 +1,17 @@
+% This code is for IO24Fall HW2, BLP exercise.
+% Please open your MATLAB or MATLAB online, copy&paste this code, product_data.csv, product_data_ps2.csv files together.
+% Due to MATLAB syntax, every local function is stated at the end of this code.
+
 clear; clc; close all;
 
 S = 500; seed_num = 1; threshold = 10^(-8); iterlim = 50000;
 options.MaxIter = 100000; options.TolFun = 10^(-6); options.Display='iter';
 
-% Optimal Value when S=1000, seed_num = 1, threshold = 10^(-8)
 % given follwing initial numbers:
-% para10 = [-1.2765; -0.8962; 0.5131; 0.5216];
-% para20 = [0.0852; -1.1072; 0.9495];
 para10 = [-1.2989; -0.9686; 0.5691; 0.5554];
 para20 = [0.0974; -1.0437; 0.9511];
+
 %% Load Data
-tic
 data_firm = table2array(readtable("product_data_ps2.csv"));
 data_consumer = table2array(readtable("consumer_census.csv"));
 jt = [data_firm(:,1), data_firm(:,8)]; % = [Firm index, Period index]
@@ -28,6 +29,7 @@ sh0 = reshape( data_firm(:,9), [J, T]); % Share
 
 w0 = [ones(J*T,1), data_firm(:,5:6).*data_firm(:,3:4)];
 ph0 =  reshape(w0*inv(w0'*w0)*w0'*data_firm(:,2), [J,T]); %Prediced Price
+
 %%
 % e.g.
 % p = [[ p_{j=1,t=1}, ..., p_{j=J,t=1} ], ..., [ p_{j=1,t=T}, ..., p_{j=J,t=T} ]]
@@ -56,9 +58,6 @@ data.z1 = z1; data.z2 = z2;
 data.T = T;
 data.J = J;
 
-clearvars -except data;
-save IO24Fall_HW2_data.mat;
-return
 %%
 % This matrix is for calculating Nonlinear GMM
 % I pre-assigned specific inverse matrix to avoid inverse-matrix operation more than twice
@@ -66,7 +65,12 @@ X0 = [ones(J*T,1), data.price', data.x1', data.x2'];
 Z0 = [data.z1', data.z2', data.ph', mean(data.vyph,1)', ones(J*T,1), data.x1', data.x2'];
 Y0 = (log(data.share) - data.lnshare0)';
 invzz = inv(Z0'*Z0);
+sqrt_invzz = chol(invzz);
+% Cholesky Decomposition : Upper Triangular Part
+% invzz = sqrt_invzz'*sqrt_invzz;
 gmm_proj = inv(X0'*Z0*invzz*Z0'*X0)*X0'*Z0*invzz*Z0';
+gmm_rsd_maker = (eye(JT) - X0*gmm_proj);
+
 %%
 idx_col = (1:1:J);
 for j=2:J
@@ -76,15 +80,13 @@ end
 delta00 = (X0*para10)';
 delta00 =  get_delta(data, para20, delta00, "print");
 xi00 = delta00' - X0*para10;
-
-get_xi = @(para)( (eye(JT)- X0*gmm_proj)*get_delta(data, para, delta00,"",iterlim,threshold)' );
-obj = @(para)( (Z0'*get_xi(para))'*invzz*(Z0'*get_xi(para)));
+get_xi = @(para)( gmm_rsd_maker*get_delta(data, para, delta00,"",iterlim,threshold)' );
+obj = @(para)( sum( (sqrt_invzz*Z0'*get_xi(para)).^2 ));
 
 para2_best = fminsearch(obj, para20, options);
 para1_best = gmm_proj*get_delta(data, para2_best, delta00)';
 figure;
 toc
-return
 
 %%
 iter=0;
