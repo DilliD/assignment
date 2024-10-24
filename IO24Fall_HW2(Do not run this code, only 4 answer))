@@ -1,0 +1,192 @@
+clear; clc; close all;
+
+S = 200; seed_num = 1; threshold = 10^(-8); iterlim = 50000;
+options.MaxIter = 100000; options.TolFun = 10^(-6); options.Display='iter';
+
+% Optimal Value when S=1000, seed_num = 1, threshold = 10^(-8)
+% given follwing initial numbers:
+% para10 = [-1.2765; -0.8962; 0.5131; 0.5216];
+% para20 = [0.0852; -1.1072; 0.9495];
+para10 = [-1.2989; -0.9686; 0.5691; 0.5554];
+para20 = [0.0974; -1.0437; 0.9511];
+
+%% Load Data
+tic
+data_firm = table2array(readtable("product_data_ps2.csv"));
+data_consumer = table2array(readtable("consumer_census.csv"));
+jt = [data_firm(:,1), data_firm(:,8)]; % = [Firm index, Period index]
+T = max(unique(jt(:,2))); % Observational Period
+J = max(unique(jt(:,1))); % # of Firms
+JT = J*T;
+yit = reshape( data_consumer(:,2), [size(data_consumer,1)/T, T] ); % Consumer's Income
+
+sugar0 = reshape( data_firm(:,3), [J, T]);
+caffein0 = reshape( data_firm(:,4), [J, T]);
+corn_syrup_price = reshape( data_firm(:,5), [J, T]);
+caffein_ext_price = reshape( data_firm(:,6), [J, T]);
+pr0 = reshape( data_firm(:,2), [J, T]); % Price
+sh0 = reshape( data_firm(:,9), [J, T]); % Share
+
+w0 = [ones(J*T,1), data_firm(:,5:6).*data_firm(:,3:4)];
+ph0 =  reshape(w0*inv(w0'*w0)*w0'*data_firm(:,2), [J,T]); %Prediced Price
+
+% e.g.
+% p = [[ p_{j=1,t=1}, ..., p_{j=J,t=1} ], ..., [ p_{j=1,t=T}, ..., p_{j=J,t=T} ]]
+% vxxk = [ [vx.*xk_{j=1, t=1}, ..., vx.*xk_{j=J, t=1}], ..., [vx.*xk_{j=1, t=T}, ..., vx.*xk_{j=J, t=T}] ]
+result = draw_yv(S, seed_num, yit); vy = result.y;
+oneJ = ones(J,1);
+data.price = reshape(pr0, [JT,1])';
+data.ph = reshape(ph0,[JT,1])';
+data.share = reshape(sh0, [JT,1])';
+data.lnshare0 = (reshape(log(eps + repmat(1 - sum(sh0,1), [T,1])), [J*T,1]))';
+data.x1 = reshape(sugar0, [JT,1])';
+data.x2 = reshape(caffein0, [JT,1])';
+data.vyp = kron(vy, oneJ').*data.price;
+data.vyph = kron(vy, oneJ').*data.ph;
+data.v1x1 = repmat(result.v1, [1,JT]).*(data.x1);
+data.v2x2 = repmat(result.v2, [1,JT]).*(data.x2);
+data.kroneyeToneJ = kron(eye(T), oneJ);
+data.oneJ = oneJ;
+
+z1 = []; z2 = [];
+for t=1:T
+    z1 = [z1, sum((sugar0(:,t) - sugar0(:,t)').^2, 2)'];
+    z2 = [z2, sum((caffein0(:,t) - caffein0(:,t)').^2, 2)'];
+end
+data.z1 = z1; data.z2 = z2;
+data.T = T;
+data.J = J;
+
+%%
+% This matrix is for calculating Nonlinear GMM
+% I pre-assigned specific inverse matrix to avoid inverse-matrix operation more than twice
+X0 = [ones(J*T,1), data.price', data.x1', data.x2'];
+Z0 = [data.z1', data.z2', data.ph', mean(data.vyph,1)', ones(J*T,1), data.x1', data.x2'];
+Y0 = (log(data.share) - data.lnshare0)';
+invzz = inv(Z0'*Z0);
+sqrt_invzz = chol(invzz);
+% Cholesky Decomposition : Upper Triangular Part
+% invzz = sqrt_invzz'*sqrt_invzz;
+gmm_proj = inv(X0'*Z0*invzz*Z0'*X0)*X0'*Z0*invzz*Z0';
+gmm_rsd_maker = (eye(JT) - X0*gmm_proj);
+
+%%
+xb0 = (X0*para10)';
+delta00 =  get_delta(data, para20, xb0, "print");
+xi00 = delta00' - xb0;
+get_xi = @(para)( gmm_rsd_maker*get_delta(data, para, delta00,"",iterlim,threshold)' );
+
+%%
+% Quasi-Newton-Raphson Method
+iter=0; step = 1;
+while iter<iterlim
+    iter = iter+1;
+    g0 = Z0'*xi00;
+    dxidpara0 = get_dxidpara(data, delta00, para20, idx_col);
+    G0 = Z0'*dxidpara0;
+    grd0 = -2*G0'*invzz*g0;
+
+    M = grd0*grd0'; M = 0.5*(M + M'); invM = inv(M + 0.001*eye(size(M,1)));
+    para21 = para20 + step*invM*grd0;
+
+    [delta01, result] = get_delta(data, para21, delta00, "");
+
+    para11 = gmm_proj*delta01';
+    xi01 = delta01' - X0*para11;
+    g1 = Z0'*xi01;
+    obj1 = -g1'*invzz*g1;
+
+    clc; disp(num2str([ iter, obj0, obj1]));
+    if abs(obj1 - obj0)<10^(-4); break;
+    elseif obj1>obj0; obj0 = obj1; para1_best = para11; para2_best = para21; delta_best = delta01;
+    end
+    xi00 = xi01;
+    para20 = para21;
+    para10 = para11;
+    delta00 = delta01;
+end
+est = [para1_best; para2_best];
+
+%%
+function result = draw_yv(S, seed, y)
+    rng(seed);
+    idx = datasample( (1:1:size(y,1))', S );
+    result.y = y(idx, :);
+    result.v1 = randn(S,1);
+    result.v2 = randn(S,1);
+end
+
+function [share, result]= get_new_share(transformed_data, para0, delta0, additional)
+    if nargin == 3; additional = 0; end
+    vyp = transformed_data.vyp;
+    v1x1 = transformed_data.v1x1;
+    v2x2 = transformed_data.v2x2;
+    T = transformed_data.T;
+    J = transformed_data.J;
+
+    mu0 = para0(1,:)*vyp + para0(2,:)*v1x1 + para0(3,:)*v2x2;
+    exp_u = exp( delta0 + mu0);
+    den = []; sw2_1= []; sw2_2= []; sw2_3= [];
+    for t=1:T
+        idx0 = T*(t-1) + (1:1:J);
+        den = [den, repmat(1 + sum(exp_u(:,idx0),2), [1,J])];
+        if additional ==1
+            % exp_u(:,idx_10).*vyp(:,idx0)
+            sw2_1 = [sw2_1, repmat(sum(exp_u(:,idx0).*vyp(:,idx0),2),[1,J])];
+            sw2_2 = [sw2_2, repmat(sum(exp_u(:,idx0).*v1x1(:,idx0),2),[1,J])];
+            sw2_3 = [sw2_3, repmat(sum(exp_u(:,idx0).*v2x2(:,idx0),2),[1,J])];
+        end
+    end
+    share =  exp_u./den;
+    result.share = share;
+    result.den = den;
+    if additional == 1
+        result.sw1 = [mean(share.*vyp,1)', mean(share.*v1x1,1)', mean(share.*v2x2,1)'];
+        result.sw2 =  [mean(share.*(sw2_1./den),1)', mean(share.*(sw2_2./den),1)', mean(share.*(sw2_3./den),1)'];
+    end
+end
+
+function [delta, result] = get_delta(transformed_data, para2, delta0, print, iterlim, threshold)
+    if nargin == 3; print = ""; iterlim = 5000; threshold = 10^(-3);
+    elseif nargin == 4; iterlim = 5000; threshold = 10^(-3);
+    elseif nargin == 5; threshold = 10^(-3);
+    end
+    if isstring(print)==0; print = ""; end
+    lnsh = log(transformed_data.share);
+    cal_new_share = @(delta, para)( mean(get_new_share(transformed_data, para, delta),1) );
+
+    iter = 0; convergence = 0;
+    while iter<iterlim
+        iter = iter + 1;
+        delta1 = delta0 + (lnsh -  log(eps + cal_new_share(delta0, para2)) );
+        diff = norm(delta1 - delta0);
+        if print=="print"; disp(num2str([iter, diff])); end
+        if isnan(diff) == 1; disp(" Error! "); break; end
+        if diff < threshold; delta = delta1; convergence = 1; break; end
+        delta0 = delta1;
+    end
+    result.convergence = convergence;
+    if convergence == 1; disp("Contraction Mapping Converged"); result.delta = delta';
+    else; result.delta = []; end
+end
+
+function result = get_dxidpara(transformed_data, delta0, para0, idx_col)
+    lnsh = log(transformed_data.share);
+    T = transformed_data.T; J = transformed_data.J;
+
+    % Obtaining inv(ds/ddelta)
+    [sh0, result0] = get_new_share(transformed_data, para0, delta0, 1);
+    inv_dsddel = [];
+    for t=1:T
+        sh0t = sh0(:,T*(t-1) + (1:1:J)');
+        grd_diag=diag(mean(sh0t.*(1-sh0t),1)');
+        grd_offdiag = reshape(mean(-repmat(sh0t, [1,J]).*sh0t(:,reshape(idx_col,[1,J*J])),1), [J,J]);
+        grd_t = grd_diag + ( grd_offdiag - diag( diag(grd_offdiag) ) );
+        invgrd_t = inv(grd_t);
+        inv_dsddel = blkdiag(inv_dsddel, invgrd_t );
+    end
+
+    % Obtaining ds/dpara
+    dsdpara = result0.sw1 - result0.sw2;
+    result = -inv_dsddel*dsdpara;
+end
