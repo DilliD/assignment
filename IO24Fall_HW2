@@ -4,7 +4,7 @@
 
 clear; clc; close all;
 % Hyper Parameters for Numeirical Contraction Mapping
-S = 500; seed_num = 1; threshold = 10^(-8); iterlim = 50000;
+S = 500; seed_num = 1; threshold = 10^(-12); iterlim = 50000;
 % Hyper Parameters for GMM minimization
 options.MaxIter = 100000; options.TolFun = 10^(-6); options.Display='iter';
 % Initial Values
