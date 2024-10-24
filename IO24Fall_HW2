@@ -1,17 +1,16 @@
 % This code is for IO24Fall HW2, BLP exercise.
-% Please open your MATLAB or MATLAB online, copy&paste this code, product_data.csv, product_data_ps2.csv files together.
-% Due to MATLAB syntax, every local function is stated at the end of this code.
+% Please open this code via MATLAB or MATLAB online, with 'copy&paste'-ing this code, product_data.csv and product_data_ps2.csv files together.
+% Due to MATLAB syntax, every local function(e.g., random selection of consumer y, contraction mapping part, etc.) is stated at the end of this code.
 
 clear; clc; close all;
-
+% Hyper Parameters
 S = 500; seed_num = 1; threshold = 10^(-8); iterlim = 50000;
 options.MaxIter = 100000; options.TolFun = 10^(-6); options.Display='iter';
-
-% given follwing initial numbers:
+% Initial Values
 para10 = [-1.2989; -0.9686; 0.5691; 0.5554];
 para20 = [0.0974; -1.0437; 0.9511];
 
-%% Load Data
+%% Data
 data_firm = table2array(readtable("product_data_ps2.csv"));
 data_consumer = table2array(readtable("consumer_census.csv"));
 jt = [data_firm(:,1), data_firm(:,8)]; % = [Firm index, Period index]
@@ -30,8 +29,7 @@ sh0 = reshape( data_firm(:,9), [J, T]); % Share
 w0 = [ones(J*T,1), data_firm(:,5:6).*data_firm(:,3:4)];
 ph0 =  reshape(w0*inv(w0'*w0)*w0'*data_firm(:,2), [J,T]); %Prediced Price
 
-%%
-% e.g.
+% intended matrix structure : e.g.,
 % p = [[ p_{j=1,t=1}, ..., p_{j=J,t=1} ], ..., [ p_{j=1,t=T}, ..., p_{j=J,t=T} ]]
 % vxxk = [ [vx.*xk_{j=1, t=1}, ..., vx.*xk_{j=J, t=1}], ..., [vx.*xk_{j=1, t=T}, ..., vx.*xk_{j=J, t=T}] ]
 result = draw_yv(S, seed_num, yit); vy = result.y;
@@ -60,12 +58,11 @@ data.J = J;
 
 %%
 % This matrix is for calculating Nonlinear GMM
-% I pre-assigned specific inverse matrix to avoid inverse-matrix operation more than twice
+% I preassigned specific inverse matrix to avoid calculating inverse-matrix more than twice
 X0 = [ones(J*T,1), data.price', data.x1', data.x2'];
 Z0 = [data.z1', data.z2', data.ph', mean(data.vyph,1)', ones(J*T,1), data.x1', data.x2'];
 Y0 = (log(data.share) - data.lnshare0)';
-invzz = inv(Z0'*Z0);
-sqrt_invzz = chol(invzz);
+invzz = inv(Z0'*Z0); sqrt_invzz = chol(invzz);
 % Cholesky Decomposition : Upper Triangular Part
 % invzz = sqrt_invzz'*sqrt_invzz;
 gmm_proj = inv(X0'*Z0*invzz*Z0'*X0)*X0'*Z0*invzz*Z0';
@@ -77,61 +74,18 @@ for j=2:J
     idx_col = [idx_col; [(j : 1 : J), (1:1:j-1)]];
 end
 
-delta00 = (X0*para10)';
-delta00 =  get_delta(data, para20, delta00, "print");
-xi00 = delta00' - X0*para10;
+xb0 = (X0*para10)';
+delta00 =  get_delta(data, para20, xb0, "print");
+xi00 = delta00' - xb0;
 get_xi = @(para)( gmm_rsd_maker*get_delta(data, para, delta00,"",iterlim,threshold)' );
 obj = @(para)( sum( (sqrt_invzz*Z0'*get_xi(para)).^2 ));
 
+% fminsearch is a MATLAB solver of minimization problem. It is based on Nelder-Mead Simplex method,
+% so that it does not require to calculate gradient or even Hessian.
 para2_best = fminsearch(obj, para20, options);
 para1_best = gmm_proj*get_delta(data, para2_best, delta00)';
-figure;
-toc
+disp("DONE!")
 
-%%
-iter=0;
-step = 1;
-while iter<iterlim
-    iter = iter+1;
-    g0 = Z0'*xi00;
-    dxidpara0 = get_dxidpara(data, delta00, para20, idx_col);
-    G0 = Z0'*dxidpara0;
-    grd0 = -2*G0'*invzz*g0;
-
-    M = grd0*grd0'; M = 0.5*(M + M'); invM = inv(M + 0.001*eye(size(M,1)));
-    para21 = para20 + step*invM*grd0;
-
-    [delta01, result] = get_delta(data, para21, delta00, "");
-
-    para11 = gmm_proj*delta01';
-    xi01 = delta01' - X0*para11;
-    g1 = Z0'*xi01;
-    obj1 = -g1'*invzz*g1;
-
-    clc; disp(num2str([ iter, obj0, obj1]));
-    if abs(obj1 - obj0)<10^(-4); break;
-    elseif obj1>obj0; obj0 = obj1; para1_best = para11; para2_best = para21; delta_best = delta01;
-    end
-    xi00 = xi01;
-    para20 = para21;
-    para10 = para11;
-    delta00 = delta01;
-end
-est = [para1_best; para2_best];
-%% Q1
-avg_yt = mean(yit,1)';
-std_yt = std(yit,1)';
-avg_pt = mean(pr0,1)';
-corr_yp = corr(avg_yt, avg_pt);
-
-%% Q2
-seed_num = 1; S = 150;
-for iter = 1:50
-    result0 = draw_yv(S, seed_num, yit);
-    pseudo_y(:,:,iter) = result0.y;
-    pseudo_v1(:,iter) = result0.v1;
-    pseudo_v2(:,iter) = result0.v2;
-end
 %%
 function result = draw_yv(S, seed, y)
     rng(seed);
@@ -141,8 +95,7 @@ function result = draw_yv(S, seed, y)
     result.v2 = randn(S,1);
 end
 
-function [share, result]= get_new_share(transformed_data, para0, delta0, additional)
-    if nargin == 3; additional = 0; end
+function [share, result]= get_new_share(transformed_data, para0, delta0)
     vyp = transformed_data.vyp;
     v1x1 = transformed_data.v1x1;
     v2x2 = transformed_data.v2x2;
@@ -155,20 +108,10 @@ function [share, result]= get_new_share(transformed_data, para0, delta0, additio
     for t=1:T
         idx0 = T*(t-1) + (1:1:J);
         den = [den, repmat(1 + sum(exp_u(:,idx0),2), [1,J])];
-        if additional ==1
-            % exp_u(:,idx_10).*vyp(:,idx0)
-            sw2_1 = [sw2_1, repmat(sum(exp_u(:,idx0).*vyp(:,idx0),2),[1,J])];
-            sw2_2 = [sw2_2, repmat(sum(exp_u(:,idx0).*v1x1(:,idx0),2),[1,J])];
-            sw2_3 = [sw2_3, repmat(sum(exp_u(:,idx0).*v2x2(:,idx0),2),[1,J])];
-        end
     end
     share =  exp_u./den;
     result.share = share;
     result.den = den;
-    if additional == 1
-        result.sw1 = [mean(share.*vyp,1)', mean(share.*v1x1,1)', mean(share.*v2x2,1)'];
-        result.sw2 =  [mean(share.*(sw2_1./den),1)', mean(share.*(sw2_2./den),1)', mean(share.*(sw2_3./den),1)'];
-    end
 end
 
 function [delta, result] = get_delta(transformed_data, para2, delta0, print, iterlim, threshold)
@@ -193,25 +136,4 @@ function [delta, result] = get_delta(transformed_data, para2, delta0, print, ite
     result.convergence = convergence;
     if convergence == 1; disp("Contraction Mapping Converged"); result.delta = delta';
     else; result.delta = []; end
-end
-
-function result = get_dxidpara(transformed_data, delta0, para0, idx_col)
-    lnsh = log(transformed_data.share);
-    T = transformed_data.T; J = transformed_data.J;
-
-    % Obtaining inv(ds/ddelta)
-    [sh0, result0] = get_new_share(transformed_data, para0, delta0, 1);
-    inv_dsddel = [];
-    parfor t=1:T
-        sh0t = sh0(:,T*(t-1) + (1:1:J)');
-        grd_diag=diag(mean(sh0t.*(1-sh0t),1)');
-        grd_offdiag = reshape(mean(-repmat(sh0t, [1,J]).*sh0t(:,reshape(idx_col,[1,J*J])),1), [J,J]);
-        grd_t = grd_diag + ( grd_offdiag - diag( diag(grd_offdiag) ) );
-        invgrd_t = inv(grd_t);
-        inv_dsddel = blkdiag(inv_dsddel, invgrd_t );
-    end
-
-    % Obtaining ds/dpara
-    dsdpara = result0.sw1 - result0.sw2;
-    result = -inv_dsddel*dsdpara;
 end
