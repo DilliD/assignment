@@ -1,0 +1,68 @@
+clear; clc; close all;
+
+% u(c) = log(c)
+% f(k) = sqrt(k)
+% delta = 1
+% beta = 0.9
+% V(k) = max{ u(c) + beta V(k')  }
+%          s.t. c + k' = f(k)
+% V(k) = max_{ 0 <= y <= sqrt(k) } { log( sqrt(k) - y ) + beta V(y) }
+
+numgrid = 5000;
+mink = 0.1;
+maxk = 10;
+beta0 = 0.9;
+kgrid = linspace(mink, maxk, numgrid)';
+cgrid = sqrt(kgrid') - kgrid;
+cgrid = cgrid.*( cgrid > 0 ) + 0.01.*(cgrid <= 0);
+ugrid = log(cgrid + eps);
+
+B = 1/(2 - beta0);
+A = (1 / (1-beta0))*( beta0*B*log( (2*B-1)/(2*B) ) + log( (1/(2*B)) ) );
+
+iter = 1;
+iterlim = 5000;
+tol = 10^(-8);
+v0 = A+B*log(kgrid);
+while iter<=iterlim
+    v1 = max( ugrid + beta0*repmat(v0,[1,numgrid]) ,[],1)';
+    disp( num2str([iter, norm(v0 - v1,2)]) )
+    if norm(v1 - v0) < tol
+        disp("Algorithm is completed"); break; 
+    else 
+        iter = iter+1;
+        v0 = v1;
+    end
+    if iter==iterlim; disp("Algorithm is terminated. Increase limitation of iteration"); end
+end
+
+vf = v1;
+c = @(k)( sqrt(k') - kgrid );
+obj = @(k)(  log(  c(k).*(c(k)>0) + eps*(c(k)<=0)  )  + beta0*repmat(vf,[1, max(size(k))]) );
+
+[kpf,idx] = get_policy(obj, kgrid, kgrid);
+cpf = sqrt(kgrid) -kgrid; cpf = max([cpf(idx,:), zeros(numgrid,1)],[],2);
+
+figure;
+plot(kgrid, vf, '-b', 'linewidth',2); hold on;
+plot(kgrid, A + B*log(kgrid), ':r', 'linewidth', 3); hold off
+xlabel("k", 'fontsize', 15);
+title("V(k)", 'fontsize', 15);
+legend("Numerical Sol", "Analytic Sol", 'fontsize', 15);
+box on; grid on;
+
+figure;
+plot(kgrid, kpf, '-b', 'linewidth',2); hold on
+plot(kgrid, 0.5*beta0*sqrt(kgrid), ':r', 'linewidth',2); hold off
+xlabel("k", 'fontsize', 15);
+title("k'(k)", 'fontsize', 15);
+legend("Numerical Sol", "Analytic Sol", 'fontsize', 15);
+box on; grid on;
+
+
+%%
+function [result, idx] = get_policy(obj, k, kgrid)
+numk = max(size(k));
+[~,idx] = max( obj(k), [], 1);
+result = kgrid(idx,:);
+end
