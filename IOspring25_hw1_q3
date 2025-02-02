@@ -1,0 +1,80 @@
+clear; clc; close all;
+dta = table2array(readtable("rustdata.csv"));
+
+x0 = dta(:,1); x1 = dta(:,3); it = dta(:,2);
+beta0 = 0.95;
+options.Maxiter = 10000;
+logistic = @(t)( 1./(1+exp(-t)) );
+
+xgrid = unique(x0);
+for iter = 1:size(xgrid,1)-1
+    like = @(p)( (x1 == xgrid(iter,:)).*log( logistic(p) ) + (x1 == xgrid(iter+1,:)).*log(1- logistic(p)) );
+    % This likelihood function automatically satisfies a restriction of 0 <= probability <= 1 
+    obj0 = @(p)( -sum( (it==0).*(x0 == xgrid(iter,:)).*like(p) ,1) );
+    obj1 = @(p)( -sum( (it==1).*(x0 == xgrid(iter,:)).*like(p) ,1) );
+    pr0(iter,:) = logistic(fminsearch(obj0, 0, options));
+    pr1(iter,:) = logistic(fminsearch(obj1, -30, options));
+end
+pr0 = [pr0; 1]; pr1 = [pr1; 0];
+
+% FE
+% EV(x,i) = int log{  exp( u(y,0) + b*EV(y,0) ) + exp( u(y,1) + b*EV(y,1) ) } p(dy|x,i)
+u = @(a, i, x)( ( a(1,1).*x + a(2,1).*(x.^2) ).*(i==0) + (a(3,1)).*(i==1) );
+G = @(a, y, EV0)( log( sum([u(a, 0, y), u(a, 1, y)] + beta0*EV0,2) + eps )  );
+
+y1 = xgrid; y2 = [xgrid(2:end,:); 10]; % Assuming Pr(x_{t+1} = 10 | x_t = 10, i = 0) = 1;
+P0 = [pr0, 1-pr0]; P1 = [pr1, 1-pr1];
+get_Gmat =@(a, EV)[G(a,y1,EV), G(a,y2,EV)];
+
+options.Maxiter = 10^4;
+a0 = 1 + 2*rand(3,1); EV0 = rand(size(xgrid,1),2); 
+obj = @(para)( -sum( get_like(para, EV0, x1, it, y1, y2, P0, P1, u, G) ,1) );
+
+obj(a0)
+[best,fval,flag] = fminsearch(obj, a0, options);
+if isreal(fval) == 0
+    a0 = 1 + 2*rand(3,1);
+    [best,fval,flag] = fminsearch(obj, a0, options);
+end
+fval
+best
+
+
+
+%%
+function result = get_EV(a0, EV0, y1, y2, P0, P1, get_Gmat, print, iterlim, tol)
+if nargin == 7; print = ""; iterlim = 1000; tol = 10^(-8);
+elseif nargin == 8; iterlim = 1000; tol = 10^(-8); 
+elseif nargin == 9; tol = 10^(-8); end
+iter = 1;
+    while iter<=iterlim
+        G0 = get_Gmat(a0, EV0);
+        EV1 = [sum(G0.*P0,2), sum(G0.*P1,2)];
+        diff = norm(EV1 - EV0);
+        if print == "print"; disp([iter, diff]); end
+        if diff < tol;  disp("Contraction Mapping Converged"); break;
+        else;   EV0 = EV1; iter = iter+1; end
+    result = EV1;
+    end
+end
+
+function result = get_like(a0, EV0, x1, it, y1, y2, P0, P1, u, G, print, iterlim, tol)
+if nargin == 10; print = ""; iterlim = 1000; tol = 10^(-8);
+elseif nargin == 11; iterlim = 1000; tol = 10^(-8); 
+elseif nargin == 12; tol = 10^(-8); end
+xgrid = unique(x1); beta0= 0.9;
+y1 = xgrid; y2 = [xgrid(2:end,:); 10]; % Assuming Pr(x_{t+1} = 10 | x_t = 10, i = 0) = 1;
+get_Gmat =@(a, EV)[G(a,y1,EV), G(a,y2,EV)];
+EV1 = get_EV(a0, EV0, y1, y2, P0, P1, get_Gmat, "");
+
+ind4x = (x1 == xgrid');
+EV1_vec = [sum((ind4x.*EV1(:,1)'),2), sum( (ind4x.*EV1(:,2)'), 2)];
+u_vec = [u(a0, 0, x1), u(a0, 1, x1)];
+num = exp( u_vec + beta0*EV1_vec );
+den = sum(num, 2);
+prob = num./den;
+lnprob = log(eps + prob);
+result = (1-it).*lnprob(:,1) + it.*lnprob(:,2);
+end
+
+
