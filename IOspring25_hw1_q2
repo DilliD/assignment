@@ -23,7 +23,7 @@ A = (1 / (1-beta0))*( beta0*B*log( (2*B-1)/(2*B) ) + log( (1/(2*B)) ) );
 iter = 1;
 iterlim = 5000;
 tol = 10^(-8);
-v0 = A+B*log(kgrid);
+v0 = ones(numgrid,1);
 while iter<=iterlim
     v1 = max( ugrid + beta0*repmat(v0,[1,numgrid]) ,[],1)';
     disp( num2str([iter, norm(v0 - v1,2)]) )
