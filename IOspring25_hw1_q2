@@ -10,7 +10,7 @@ clear; clc; close all;
 
 numgrid = 5000;
 mink = 0.1;
-maxk = 10;
+maxk = 5;
 beta0 = 0.9;
 kgrid = linspace(mink, maxk, numgrid)';
 cgrid = sqrt(kgrid') - kgrid;
