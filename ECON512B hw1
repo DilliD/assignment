@@ -1,0 +1,125 @@
+clear; clc; close all;
+
+%% Q1
+x = [(1:1:5),7,9,10];
+y1 = -2 + 0.5*x;
+y2 = -2 + 0.5*x.^2;
+figure;
+plot(x, y1, '-b', 'linewidth',2); hold on
+plot(x, y2, '-r', 'linewidth',2); hold off
+xlim([1 10]);
+xlabel("x",'fontsize',15); ylabel("y",'fontsize',15);
+legend("y1", "y2", 'fontsize',15);
+box on; grid on;
+
+%% Q2
+A = ceil( 20*rand(5,2) );
+mean_geo = exp( mean( log(A) ,1) );
+X = A./mean_geo;
+disp("Q2.")
+disp("              A               //                 X")
+disp([A, X])
+disp("Geometric Mean of A")
+disp(mean_geo)
+disp(" ")
+
+%% Q3-1
+A = [[2,4,6];[1,7,5];[3,12,4]]; 
+B =[ -2;3;10];
+C = A'*B;
+D = inv(A'*A)*B;
+E = sum(A'*B, 1);
+F = A(:,1);
+xs = inv(A)*B;
+
+disp("-----")
+disp("Q3-1.")
+disp("C")
+disp(C)
+disp("D")
+disp(D)
+disp("E")
+disp(E)
+disp("F")
+disp(F)
+disp("sol of Ax = B")
+disp(xs);
+disp(" ")
+disp("----")
+
+%% Q3-2
+B = blkdiag(A,A,A,A,A);
+disp("-----")
+disp("Q3-2.")
+disp("B = blkdiag(A,...,A)")
+disp(B)
+disp(" ")
+disp("-----")
+
+%% Q3-3
+eyen = eye(10^4);
+disp(" Q3 - 3")
+tic
+inv(eyen);
+toc
+
+%% Q4-1
+A0 = 10 + sqrt(5)*randn(5,3);
+A = (A0 >=10);
+disp("---------------")
+disp(" Q4 - 1")
+disp("---------------")
+disp(" Original A ~ N(10, 5)")
+disp(A0)
+disp(" A = 1(A >= 10)")
+disp(A);
+disp("---------------")
+
+%% Q4-2
+rng(123)
+B0 = 10 + sqrt(5)*randn(5,3);
+B = (B0 >=10);
+
+rng(123)
+C0 = 10 + sqrt(5)*randn(5,3);
+C = (C0 >=10);
+disp("---------------")
+disp(" Q4-2")
+disp("\| A - B \|")
+disp(norm(A - B))
+disp("\| A - C \|")
+disp(norm(A - C))
+disp("\| B - C \|")
+disp(norm(B - C))
+
+
+%% Q5
+dta = table2array( readtable( "datahw1.csv" ) );
+export = dta(:,3);
+rnd = dta(:,4);
+prod = dta(:,5);
+cap = dta(:,6);
+
+n = size(dta,1); one = ones(n,1);
+y = prod;
+x = [one, export, rnd, cap];
+
+invxx = inv(x'*x);
+bols = invxx*x'*y;
+rsd = y - x*bols; rsd2 = rsd.^2;
+vcov = invxx*(x'*(rsd2.*x))*invxx;
+se = sqrt(diag(vcov));
+tv = bols./se;
+pv = 2*(1- normcdf(abs(tv)) );
+
+% Alternatively one can obtain p-value by following:
+% ns = 10^5; z = randn(ns,1);
+% pv = 2*mean( z > abs(tv)' , 1)';
+
+varname = ["   1    "; "Export"; " R&D  "; "Capital "];
+result = [bols, se, tv, pv];
+disp("----")
+disp("Q5")
+disp("  Regressor  //   est    //      se     //     tv     //      pv")
+disp(varname + repmat(" :   ",[4,1]) + num2str(  round(result,3) ) );
+disp("----")
